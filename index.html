@@ -2,24 +2,106 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OnePaw AI Chat (Always Ask Name)</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background: #eef2f3; }
     #welcomeScreen, #chat { max-width: 600px; margin: auto; }
-    #chat { display: none; }
-    #messages { border: 1px solid #ccc; height: 400px; overflow-y: scroll; padding: 10px; background: #fff; margin-bottom: 10px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }
-    #inputArea { display: flex; }
-    #userInput { flex: 1; padding: 10px; }
-    #sendBtn { padding: 10px; }
+    #chat {
+      display: flex;
+      flex-direction: column;
+      height: 100vh; /* Full viewport height */
+    }
+
+    #chat h2 {
+      position: sticky; /* Keep the header visible at the top */
+      top: 0;
+      background: #eef2f3; /* Match the background color */
+      padding: 10px;
+      text-align: center;
+      z-index: 10; /* Ensure it stays above other elements */
+      border-bottom: 1px solid #ccc; /* Optional: Add a separator below the header */
+    }
+
+    #messages {
+      flex: 1; /* Take up the remaining space between the header and input area */
+      overflow-y: auto; /* Enable scrolling for the chat area */
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+
+    #inputArea {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      overflow: hidden;
+      padding: 10px;
+      background: #eef2f3;
+    }
+
+    #userInput {
+      flex: 1; /* Make the input field take up the remaining space */
+      padding: 10px;
+      font-size: 16px;
+      border: none; /* Remove the default border */
+      outline: none; /* Remove the outline when focused */
+    }
+    #sendBtn {
+      padding: 12px 24px; /* Larger padding for better touch experience */
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-left: 1px solid #ccc; /* Add a separator between input and button */
+    }
+    #sendBtn:hover {
+      background-color: #0056b3;
+    }
     .message { margin: 5px 0; padding: 8px 12px; border-radius: 15px; display: inline-block; max-width: 80%; }
     .user { text-align: right; color: blue; background: #d9f7ff; align-self: flex-end; }
     .bot { text-align: left; color: green; background: #e8ffe8; align-self: flex-start; }
 
+    #nameInput, #startChatBtn {
+      width: 100%; /* Make both elements take up the full width */
+      padding: 10px; /* Ensure consistent padding */
+      font-size: 16px; /* Ensure consistent font size */
+      box-sizing: border-box; /* Include padding and border in the element's width */
+    }
+
+    #startChatBtn {
+      background-color: #007bff; /* Blue background */
+      color: white; /* White text */
+      border: none; /* Remove border */
+      border-radius: 5px; /* Rounded corners */
+      cursor: pointer; /* Pointer cursor on hover */
+    }
+
+    #startChatBtn:hover {
+      background-color: #0056b3; /* Darker blue on hover */
+    }
+
     @media (max-width: 600px) {
-      body { padding: 10px; }
-      #messages { height: 300px; }
-      #inputArea { flex-direction: column; }
-      #userInput, #sendBtn { width: 100%; margin-bottom: 5px; }
+      body { padding: 10px; font-size: 16px; }
+      #messages { height: 250px; }
+      #inputArea {
+        flex-direction: row; /* Ensure input and button are aligned horizontally */
+        gap: 0; /* Remove spacing between input and button */
+      }
+      #userInput {
+        flex: 1; /* Make the input field take up the remaining space */
+        width: auto; /* Ensure it doesn't stretch unnecessarily */
+      }
+      #sendBtn {
+        width: auto; /* Ensure the button doesn't stretch */
+      }
+      h2, p { text-align: center; }
+      input, button { font-size: 16px; }
     }
   </style>
 </head>
@@ -38,24 +120,11 @@
   <div id="messages"></div>
   <div id="inputArea">
     <input id="userInput" type="text" placeholder="Type your message here..." aria-label="Message input" />
-    <button id="sendBtn" aria-label="Send message">Send</button>
+    <button id="sendBtn" aria-label="Send message">➤</button>
   </div>
 </div>
 
 <script>
-let webhookUrl = null;
-
-fetch('http://localhost:3000/get-webhook-url')
-  .then(response => response.json())
-  .then(config => {
-    webhookUrl = config.webhookUrl;
-    console.log("Webhook URL loaded:", webhookUrl);
-  })
-  .catch(error => {
-    console.error("Failed to load webhook URL:", error);
-    alert("Failed to connect to the server. Please try again later.");
-  });
-
 let preferredName = null;
 
 // Always show welcome screen on load
@@ -65,15 +134,20 @@ document.getElementById('chat').style.display = 'none';
 document.getElementById('startChatBtn').addEventListener('click', () => {
   localStorage.removeItem('chatHistory'); // Clear previous chat history from localStorage
   document.getElementById('messages').innerHTML = ''; // Clear chat messages from the chat window
-
   const nameInput = document.getElementById('nameInput').value.trim();
-  if (!nameInput || nameInput.length > 50) {
+  const sanitizedPreferredName = escapeHTML(nameInput); // Sanitize input
+  if (!sanitizedPreferredName || sanitizedPreferredName.length > 50) {
     return alert("Please enter a valid name (max 50 characters).");
   }
-  preferredName = nameInput;
+  preferredName = sanitizedPreferredName;
   document.getElementById('welcomeScreen').style.display = 'none';
   document.getElementById('chat').style.display = 'block';
   addMessage('bot', `Hi ${preferredName}! How can I assist you today?`);
+
+  // Scroll to the bottom to ensure the welcome message is visible
+  const messages = document.getElementById('messages');
+  messages.scrollTop = messages.scrollHeight;
+
   document.getElementById('userInput').focus();
 });
 
@@ -82,29 +156,33 @@ document.getElementById('sendBtn').addEventListener('click', async () => {
   const message = inputField.value.trim();
   if (!message) {
     inputField.style.border = '2px solid red';
-    setTimeout(() => inputField.style.border = '', 1000); // Reset border after 1 second
+    setTimeout(() => (inputField.style.border = ''), 1000); // Reset border after 1 second
     return;
   }
-
+  if (message.length > 500) {
+    alert("Your message is too long. Please limit it to 500 characters.");
+    return;
+  }
   addMessage('user', message);
   inputField.value = '';
-
   document.getElementById('sendBtn').disabled = true;
   addMessage('bot', "Typing...");
+
   try {
-    const res = await fetch(webhookUrl, {
+    const response = await fetch('https://images-though-submission-taxi.trycloudflare.com/proxy-webhook', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ preferredName, message })
+      body: JSON.stringify({ message, preferredName }),
     });
-
-    const data = await res.json();
-    document.querySelector('.bot:last-child').remove(); // Remove "Typing..." message
+    const data = await response.json();
     if (data && data.reply) {
       addMessage('bot', data.reply);
     } else {
       addMessage('bot', "Sorry, I didn't understand that.");
     }
+  } catch (error) {
+    console.error("Error sending message:", error);
+    addMessage('bot', "Sorry, I couldn't connect to the server. Please try again later.");
   } finally {
     document.getElementById('sendBtn').disabled = false;
   }
@@ -126,26 +204,55 @@ function addMessage(sender, text) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `message ${sender}`;
   msgDiv.innerHTML = escapeHTML(text);
-  document.getElementById('messages').appendChild(msgDiv);
-  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+  const messages = document.getElementById('messages');
+  messages.appendChild(msgDiv);
+
+  // Automatically scroll to the bottom of the chat area
+  messages.scrollTop = messages.scrollHeight;
 }
 
 function saveChatHistory() {
-  const messages = Array.from(document.getElementById('messages').children).map(msg => ({
-    sender: msg.className.split(' ')[1],
-    text: msg.textContent
-  }));
-  localStorage.setItem('chatHistory', JSON.stringify(messages));
+  try {
+    const messages = Array.from(document.getElementById('messages').children).map((msg) => ({
+      sender: msg.className.split(' ')[1],
+      text: msg.textContent,
+    }));
+    localStorage.setItem('chatHistory', JSON.stringify(messages));
+  } catch (error) {
+    console.warn("Failed to save chat history:", error);
+  }
 }
 
 function loadChatHistory() {
-  const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
-  history.forEach(msg => addMessage(msg.sender, msg.text));
+  try {
+    const history = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+    history.forEach((msg) => addMessage(msg.sender, msg.text));
+  } catch (error) {
+    console.warn("Failed to load chat history:", error);
+    addMessage('bot', "Welcome! Your chat history is unavailable in this session.");
+  }
 }
+
+function adjustChatHeight() {
+  const chat = document.getElementById('chat');
+  const messages = document.getElementById('messages');
+  const inputArea = document.getElementById('inputArea');
+
+  // Calculate available height for the chat area
+  const viewportHeight = window.innerHeight;
+  const inputAreaHeight = inputArea.offsetHeight;
+  const chatHeaderHeight = chat.querySelector('h2').offsetHeight;
+
+  // Adjust the height of the messages area
+  messages.style.height = `${viewportHeight - inputAreaHeight - chatHeaderHeight - 20}px`; // 20px for padding
+}
+
+// Adjust chat height on load and when the window resizes
+window.addEventListener('load', adjustChatHeight);
+window.addEventListener('resize', adjustChatHeight);
 
 window.addEventListener('beforeunload', saveChatHistory);
 window.addEventListener('load', loadChatHistory);
 </script>
-
 </body>
 </html>
